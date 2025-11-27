@@ -1,0 +1,5 @@
+{
+  "name": "Copy of KernelCommit AI Search",
+  "description": "A React application leveraging Gemini 3.0 Pro to perform semantic search and RAG analysis on Linux Kernel git logs. Upload a log file or use sample data to find relevant commits based on natural language queries.",
+  "requestFramePermissions": []
+}
