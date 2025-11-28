@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Search, FileText, Upload, Cpu, AlertCircle, Loader2, Github, LayoutGrid, Sparkles, Settings, Key, X } from 'lucide-react';
+import { Search, FileText, Upload, Cpu, AlertCircle, Loader2, Github, LayoutGrid, Sparkles, Settings, Key, X, AlertTriangle } from 'lucide-react';
 import { CommitAnalysis, AppState, DataSource } from './types';
 import { analyzeCommits, extractSearchTerms } from './services/geminiService';
 import { searchLinuxKernelCommits } from './services/githubService';
@@ -18,6 +18,7 @@ const App: React.FC = () => {
   // API Key Management
   const [showSettings, setShowSettings] = useState(false);
   const [userApiKey, setUserApiKey] = useState<string>(() => localStorage.getItem('gemini_api_key') || '');
+  const [keyWarning, setKeyWarning] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,9 +49,22 @@ const App: React.FC = () => {
     return '';
   }, [userApiKey]);
 
-  const handleSaveKey = (key: string) => {
-    setUserApiKey(key);
-    localStorage.setItem('gemini_api_key', key);
+  const handleSaveKey = (input: string) => {
+    // Auto-trim whitespace which is a common copy-paste error
+    const cleanedKey = input.trim();
+    setUserApiKey(cleanedKey);
+    localStorage.setItem('gemini_api_key', cleanedKey);
+
+    // Immediate validation feedback
+    if (cleanedKey.length > 0 && !cleanedKey.startsWith('AIza')) {
+      if (cleanedKey.startsWith('sk-')) {
+        setKeyWarning("This looks like an OpenAI or DeepSeek key. This app requires a Google Gemini API Key (starts with 'AIza').");
+      } else {
+        setKeyWarning("Warning: Google API Keys typically start with 'AIza'. Please check your key.");
+      }
+    } else {
+      setKeyWarning(null);
+    }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -121,9 +135,20 @@ const App: React.FC = () => {
 
     } catch (err) {
       setAppState(AppState.ERROR);
-      setErrorMsg(err instanceof Error ? err.message : "An unexpected error occurred during analysis.");
+      const msg = err instanceof Error ? err.message : "An unexpected error occurred during analysis.";
+      setErrorMsg(msg);
+      
+      // Auto-open settings if it's clearly an auth error
+      if (msg.includes("API key not valid") || msg.includes("400") || msg.includes("API_KEY_INVALID")) {
+        setShowSettings(true);
+        // If the user hasn't typed anything yet (using env var), warn them. 
+        // If they have typed something, the handleSaveKey validation covers it.
+        if (!userApiKey) {
+           setKeyWarning("The configured API Key is invalid. Please enter a valid Google Gemini API Key.");
+        }
+      }
     }
-  }, [query, logContent, dataSource, getEffectiveApiKey]);
+  }, [query, logContent, dataSource, getEffectiveApiKey, userApiKey]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -191,12 +216,18 @@ const App: React.FC = () => {
                     value={userApiKey}
                     onChange={(e) => handleSaveKey(e.target.value)}
                     placeholder="AIzaSy..."
-                    className="w-full bg-[#0D1117] border border-terminal-border rounded-md p-3 text-sm text-white focus:outline-none focus:border-terminal-highlight font-mono"
+                    className={`w-full bg-[#0D1117] border rounded-md p-3 text-sm text-white focus:outline-none font-mono ${keyWarning ? 'border-yellow-500 focus:border-yellow-500' : 'border-terminal-border focus:border-terminal-highlight'}`}
                   />
+                  {keyWarning && (
+                    <div className="mt-2 text-xs text-yellow-400 flex items-start gap-1.5">
+                       <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                       <span>{keyWarning}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-[#0f1218] p-3 rounded border border-terminal-border text-xs text-gray-500">
-                  Tip: If you deploy this app, you can also set <code className="text-terminal-highlight">VITE_API_KEY</code> in your environment variables to avoid entering this manually.
+                  Tip: Get a free key at <a href="https://aistudiocdn.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-terminal-highlight hover:underline">aistudio.google.com</a>.
                 </div>
 
                 <button 
